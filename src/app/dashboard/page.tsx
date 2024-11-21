@@ -13,9 +13,13 @@ export default function Dashboard() {
   const [context1, setContext1] = useState('')
   const [context2, setContext2] = useState('')
   const [analysisResult, setAnalysisResult] = useState<any>(null)
+  const [disputeId, setDisputeId] = useState<number | null>(null)
+  const [disputeResult, setDisputeResult] = useState<any>(null)
+  const [isAnalyzing, setIsAnalyzing] = useState(false)
+  const [isStoring, setIsStoring] = useState(false)
 
   const handleAnalyze = async () => {
-    setIsLoading(true)
+    setIsAnalyzing(true)
     try {
       const response = await axios.post('/api/analyze-dispute', {
         text,
@@ -50,7 +54,82 @@ export default function Dashboard() {
       })
       setShowReport(true)
     } finally {
-      setIsLoading(false)
+      setIsAnalyzing(false)
+    }
+  }
+
+  const handleStoreDispute = async () => {
+    setIsStoring(true)
+    try {
+      const response = await fetch('http://localhost:8000/api/store-dispute', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          party_one_name: partyOneName,
+          party_two_name: partyTwoName,
+          context1: context1,
+          context2: context2,
+          text: text,
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
+      }
+      
+      const data = await response.json()
+
+      if (data.dispute_id) {
+        setDisputeId(data.dispute_id)
+        /*alert(`Dispute stored successfully with ID: ${data.dispute_id}`)*/
+      } else {
+        throw new Error('No dispute ID received in response')
+      }
+    } catch (error) {
+      console.error('Error storing dispute:', error)
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred'
+      alert(`Failed to store dispute: ${errorMessage}`)
+    } finally {
+      setIsStoring(false)
+    }
+  }
+
+  const handleGetDispute = async () => {
+    console.log('Starting getDispute with ID:', disputeId);
+    if (!disputeId) {
+      alert('No dispute ID available');
+      return;
+    }
+
+    try {
+      const response = await fetch(`http://localhost:8000/api/dispute/${disputeId}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      })
+
+      const data = await response.json()
+      
+      // Set form data
+      setPartyOneName(data.party_one_name)
+      setPartyTwoName(data.party_two_name)
+      setContext1(data.context1)
+      setContext2(data.context2)
+      setText(data.conversation)
+
+      // Set analysis result
+      setAnalysisResult({
+        winner: data.result.winner,
+        winner_explanation: data.result.winner_explanation
+      })
+      
+      setShowReport(true)
+    } catch (error) {
+      console.error('Error:', error)
+      alert('Failed to fetch dispute')
     }
   }
 
@@ -120,8 +199,35 @@ export default function Dashboard() {
               onClick={handleAnalyze}
               className="mt-6 bg-yellow-400 text-red-700 px-6 py-3 rounded-full text-xl font-bold hover:bg-yellow-300 transition-transform transform hover:scale-105"
             >
-              Analyze Dispute
+            Analyze Dispute
             </button>
+            <button
+              type="button"
+              onClick={() => {
+                console.log('Get Dispute button clicked');  // Debug log
+                handleGetDispute();
+              }}
+              className="mt-6 bg-green-400 text-white px-6 py-3 rounded-full text-xl font-bold"
+            >
+              Get Dispute Test
+            </button>
+
+            <button
+              onClick={handleStoreDispute}
+              className="mt-6 bg-blue-400 text-white px-6 py-3 rounded-full text-xl font-bold hover:bg-blue-300 transition-transform transform hover:scale-105"
+            >
+              Store Dispute
+            </button>
+            {/*
+            <button
+              onClick={() => {
+                console.log('Get Dispute button clicked');  // Debug log
+                handleGetDispute();
+              }}
+              className="mt-6 bg-green-400 text-white px-6 py-3 rounded-full text-xl font-bold hover:bg-green-300 transition-transform transform hover:scale-105"
+            >
+              Get Dispute
+            </button>*/}
           </div>
         ) : (
           <div className="bg-white/10 backdrop-blur-md rounded-lg p-6 mb-8">
@@ -147,7 +253,7 @@ export default function Dashboard() {
           </div>
         )}
         
-        {isLoading && (
+        {isAnalyzing && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
             <div className="bg-white rounded-lg p-8 text-center">
               <div className="animate-spin-slow rounded-full h-32 w-32 border-t-4 border-b-4 border-red-500 mx-auto mb-4"></div>
